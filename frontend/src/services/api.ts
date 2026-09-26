@@ -1,10 +1,10 @@
-import axios, { AxiosError } from 'axios'
+import axios, { type AxiosError } from 'axios'
 
 const TOKEN_KEY = 'stocksense_access_token'
 const USER_KEY = 'stocksense_user'
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -46,7 +46,7 @@ export function apiMessage(error: unknown): string {
     if (typeof message === 'string') return message
     if (error.response?.status === 401) return 'Your session has expired. Please sign in again.'
     if (error.response?.status === 403) return 'You do not have permission to complete this action.'
-    if (!error.response) return 'Could not reach the server. Check your connection and API URL.'
+    if (!error.response) return 'Backend connection unavailable. Check the API URL and retry.'
   }
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.'
 }

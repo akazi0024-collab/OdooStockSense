@@ -3,4 +3,5 @@ import type { Movement } from './types'
 
 export const ledgerService = {
   async list(params?: Record<string, string | number | undefined>) { return asList<Movement>((await api.get('/ledger', { params })).data) },
+  async product(productId: string | number) { return asList<Movement>((await api.get(`/ledger/product/${productId}`)).data) },
 }

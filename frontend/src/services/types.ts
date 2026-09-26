@@ -2,6 +2,7 @@ export type Entity = {
   id: string | number
   name?: string
   sku?: string
+  description?: string
   code?: string
   email?: string
   phone?: string
@@ -9,12 +10,17 @@ export type Entity = {
   quantity?: number
   currentStock?: number
   quantityDelta?: number
+  systemQuantity?: number
+  physicalQuantity?: number
+  difference?: number
   lowStockThreshold?: number
   reorderLevel?: number
   price?: number
   unitPrice?: number
+  unitOfMeasure?: string
   active?: boolean
   address?: string
+  contactPerson?: string
   locationId?: string | number
   locationName?: string
   warehouseId?: string | number
@@ -22,6 +28,7 @@ export type Entity = {
   categoryId?: string | number
   categoryName?: string
   reference?: string
+  performedBy?: string
   createdAt?: string
   occurredAt?: string
   balanceAfter?: number
@@ -48,6 +55,12 @@ export type User = {
 }
 
 export type DashboardStats = {
+  productsInStock?: number
+  lowStockItems?: number
+  outOfStockItems?: number
+  pendingReceipts?: number
+  pendingDeliveries?: number
+  internalTransfers?: number
   products?: number
   locations?: number
   suppliers?: number
@@ -59,7 +72,6 @@ export type DashboardStats = {
   inventoryValue?: number
   totalValue?: number
   lowStockCount?: number
-  lowStockItems?: number
   activeWarehouses?: number
   warehouseCount?: number
   [key: string]: unknown
@@ -77,6 +89,7 @@ export type Movement = {
   quantityDelta?: number
   balanceAfter?: number
   reference?: string
+  performedBy?: string
   locationName?: string
   locationId?: string | number
   occurredAt?: string

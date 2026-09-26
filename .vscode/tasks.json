@@ -1,0 +1,22 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "StockSense frontend: Vite dev server",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"${env:HOME}/.local/lib/npm/bin/npm-cli.js",
+				"--prefix",
+				"frontend",
+				"run",
+				"dev",
+				"--",
+				"--host",
+				"0.0.0.0"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

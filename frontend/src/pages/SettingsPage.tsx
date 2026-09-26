@@ -1,9 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, LockKeyhole, Save, UserRound } from 'lucide-react'
+import { UserRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { Button, Card, PageHeader } from '../components/ui'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, KeyRound, ShieldCheck, UserRound } from 'lucide-react'
+import { ArrowRight, KeyRound, ShieldCheck } from 'lucide-react'
 
 export function SettingsPage() {
   const { user } = useAuth()

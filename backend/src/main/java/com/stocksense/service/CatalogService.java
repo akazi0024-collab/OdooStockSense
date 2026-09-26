@@ -16,15 +16,15 @@ public class CatalogService {
         this.categories=categories; this.products=products; this.warehouses=warehouses; this.locations=locations; this.suppliers=suppliers; this.customers=customers;
     }
     public List<CategoryView> categories() { return categories.findAll().stream().map(this::categoryView).toList(); }
-    public CategoryView category(Long id) { return categoryView(category(id)); }
+    public CategoryView category(Long id) { return categoryView(categoryEntity(id)); }
     public CategoryView createCategory(CategoryRequest r) { Category c=new Category(); set(c,r); return categoryView(categories.save(c)); }
-    public CategoryView updateCategory(Long id,CategoryRequest r) { Category c=category(id); set(c,r); return categoryView(c); }
-    public void deleteCategory(Long id) { categories.delete(category(id)); }
+    public CategoryView updateCategory(Long id,CategoryRequest r) { Category c=categoryEntity(id); set(c,r); return categoryView(c); }
+    public void deleteCategory(Long id) { categories.delete(categoryEntity(id)); }
     public List<ProductView> products() { return products.findAll().stream().map(this::productView).toList(); }
-    public ProductView product(Long id) { return productView(product(id)); }
+    public ProductView product(Long id) { return productView(productEntity(id)); }
     public ProductView createProduct(ProductRequest r) { Product p=new Product(); set(p,r); return productView(products.save(p)); }
-    public ProductView updateProduct(Long id,ProductRequest r) { Product p=product(id); set(p,r); return productView(p); }
-    public void deleteProduct(Long id) { products.delete(product(id)); }
+    public ProductView updateProduct(Long id,ProductRequest r) { Product p=productEntity(id); set(p,r); return productView(p); }
+    public void deleteProduct(Long id) { products.delete(productEntity(id)); }
     public List<WarehouseView> warehouses() { return warehouses.findAll().stream().map(this::warehouseView).toList(); }
     public WarehouseView warehouse(Long id) { return warehouseView(warehouses.findById(id).orElseThrow(()->missing("Warehouse",id))); }
     public WarehouseView createWarehouse(WarehouseRequest r) { Warehouse w=new Warehouse(); set(w,r); return warehouseView(warehouses.save(w)); }
@@ -47,16 +47,16 @@ public class CatalogService {
     public void deleteCustomer(Long id) { customers.delete(customers.findById(id).orElseThrow(()->missing("Customer",id))); }
 
     private void set(Category c,CategoryRequest r) { c.setName(r.name().trim()); c.setDescription(r.description()); }
-    private void set(Product p,ProductRequest r) { p.setSku(r.sku().trim()); p.setName(r.name().trim()); p.setDescription(r.description()); p.setCategory(r.categoryId()==null?null:categories.findById(r.categoryId()).orElseThrow(()->missing("Category",r.categoryId()))); p.setUnitPrice(r.unitPrice()); p.setLowStockThreshold(r.lowStockThreshold()); if (r.active()!=null) p.setActive(r.active()); }
-    private void set(Warehouse w,WarehouseRequest r) { w.setName(r.name().trim()); w.setAddress(r.address()); }
+    private void set(Product p,ProductRequest r) { p.setSku(r.sku().trim()); p.setName(r.name().trim()); p.setDescription(r.description()); p.setCategory(r.categoryId()==null?null:categories.findById(r.categoryId()).orElseThrow(()->missing("Category",r.categoryId()))); p.setUnitPrice(r.unitPrice()); p.setLowStockThreshold(r.lowStockThreshold()); p.setUnitOfMeasure(r.unitOfMeasure()==null || r.unitOfMeasure().isBlank()?"unit":r.unitOfMeasure().trim()); if (r.active()!=null) p.setActive(r.active()); }
+    private void set(Warehouse w,WarehouseRequest r) { w.setName(r.name().trim()); w.setCode(r.code()==null || r.code().isBlank()?r.name().trim().toUpperCase().replaceAll("[^A-Z0-9]+","-").replaceAll("^-|-$",""):r.code().trim().toUpperCase()); w.setAddress(r.address()); }
     private void set(Location l,LocationRequest r) { l.setName(r.name().trim()); l.setCode(r.code().trim()); l.setWarehouse(warehouses.findById(r.warehouseId()).orElseThrow(()->missing("Warehouse",r.warehouseId()))); }
-    private void set(BusinessParty p,PartyRequest r) { p.setName(r.name().trim()); p.setEmail(r.email()); p.setPhone(r.phone()); p.setAddress(r.address()); }
-    private Category category(Long id) { return categories.findById(id).orElseThrow(()->missing("Category",id)); }
-    private Product product(Long id) { return products.findById(id).orElseThrow(()->missing("Product",id)); }
+    private void set(BusinessParty p,PartyRequest r) { p.setName(r.name().trim()); p.setContactPerson(r.contactPerson()); p.setEmail(r.email()); p.setPhone(r.phone()); p.setAddress(r.address()); }
+    private Category categoryEntity(Long id) { return categories.findById(id).orElseThrow(()->missing("Category",id)); }
+    private Product productEntity(Long id) { return products.findById(id).orElseThrow(()->missing("Product",id)); }
     private CategoryView categoryView(Category c) { return new CategoryView(c.getId(),c.getName(),c.getDescription()); }
-    private ProductView productView(Product p) { return new ProductView(p.getId(),p.getSku(),p.getName(),p.getDescription(),p.getCategory()==null?null:p.getCategory().getId(),p.getCategory()==null?null:p.getCategory().getName(),p.getUnitPrice(),p.getLowStockThreshold(),p.isActive()); }
-    private WarehouseView warehouseView(Warehouse w) { return new WarehouseView(w.getId(),w.getName(),w.getAddress()); }
+    private ProductView productView(Product p) { return new ProductView(p.getId(),p.getSku(),p.getName(),p.getDescription(),p.getCategory()==null?null:p.getCategory().getId(),p.getCategory()==null?null:p.getCategory().getName(),p.getUnitPrice(),p.getLowStockThreshold(),p.isActive(),p.getUnitOfMeasure()); }
+    private WarehouseView warehouseView(Warehouse w) { return new WarehouseView(w.getId(),w.getName(),w.getCode(),w.getAddress()); }
     private LocationView locationView(Location l) { return new LocationView(l.getId(),l.getName(),l.getCode(),l.getWarehouse().getId(),l.getWarehouse().getName()); }
-    private PartyView partyView(BusinessParty p) { return new PartyView(p.getId(),p.getName(),p.getEmail(),p.getPhone(),p.getAddress()); }
+    private PartyView partyView(BusinessParty p) { return new PartyView(p.getId(),p.getName(),p.getContactPerson(),p.getEmail(),p.getPhone(),p.getAddress()); }
     private NotFoundException missing(String type,Long id) { return new NotFoundException(type+" "+id+" not found"); }
 }

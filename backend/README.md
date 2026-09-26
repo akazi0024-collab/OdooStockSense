@@ -21,19 +21,19 @@ Change/remove this account and the development secret before deploying. The seed
 
 ## Authentication
 
-`POST /api/auth/register` accepts `{ "name", "email", "password" }`; `POST /api/auth/login` accepts `{ "email", "password" }`. Both return a JWT and account details. Send `Authorization: Bearer <token>` to protected routes. Registration creates a STAFF account; the empty-database seed creates the ADMIN account. Passwords are BCrypt hashed.
+`POST /api/auth/register` accepts `{ "name", "email", "password" }`; `POST /api/auth/login` accepts `{ "email", "password" }`. Both return a JWT and account details. Send `Authorization: Bearer <token>` to protected routes. Registration creates a WAREHOUSE_STAFF account; the empty-database seed creates the ADMIN account. Catalog mutations are limited to administrators/managers, and catalog deletion is administrator-only. Passwords are BCrypt hashed.
 
-For local reset, call `POST /api/auth/forgot-password` with `{ "email" }`, then `POST /api/auth/reset-password` with `{ "email", "otp", "newPassword" }`. OTPs expire after ten minutes and are held in memory, so a restart invalidates them. The OTP is included in the response only while `app.reset.expose-otp=true`; wire a real delivery provider for production.
+For local reset, call `POST /api/auth/forgot-password` with `{ "email" }`, `POST /api/auth/verify-otp` with `{ "email", "otp" }`, then `POST /api/auth/reset-password` with `{ "email", "otp", "newPassword" }`. OTPs expire after ten minutes and are held in memory, so a restart invalidates them. The OTP is included in the response only while `app.reset.expose-otp=true`; wire a real delivery provider for production.
 
 ## API surface
 
 All endpoints other than `/api/auth/**` and OpenAPI docs require a bearer token.
 
 - Catalog CRUD: `/api/products`, `/api/categories`, `/api/warehouses`, `/api/locations`, `/api/suppliers`, `/api/customers` (`GET`, `POST`, `PUT /{id}`, `DELETE /{id}`; products and categories also have `GET /{id}`).
-- Stock: `GET /api/stock?locationId=&productId=`, `GET /api/stock/low`, `GET /api/ledger?locationId=&size=`.
-- Receipts: `GET/POST /api/receipts`, `GET /api/receipts/{id}`, `POST /api/receipts/{id}/validate`.
-- Deliveries: `GET/POST /api/deliveries`, `GET /api/deliveries/{id}`, then `POST /{id}/pick`, `POST /{id}/pack`, `POST /{id}/validate`.
-- Transfers and adjustments: `GET/POST /api/transfers` and `/api/adjustments`; validate with `POST /{id}/validate`.
+- Stock: `GET /api/stock?locationId=&productId=`, `/api/stock/product/{id}`, `/api/stock/warehouse/{id}`, `GET /api/stock/low`, `GET /api/ledger?locationId=&size=`, `/api/ledger/product/{id}`.
+- Receipts: `GET/POST /api/receipts`, `GET/PUT/DELETE /api/receipts/{id}`, `POST /api/receipts/{id}/validate`.
+- Deliveries: `GET/POST /api/deliveries`, `GET/PUT/DELETE /api/deliveries/{id}`, then `POST /{id}/pick`, `/pack`, `/validate`.
+- Transfers and adjustments: `GET/POST /api/transfers` and `/api/adjustments`; draft documents support `PUT/DELETE /{id}` and validation uses `POST /{id}/validate`.
 - Dashboard: `GET /api/dashboard/stats`, `/movements`, `/category-stock`, `/low-stock`.
 
 Document creation is draft-only and does not change stock. Only successful validation changes on-hand balances and appends ledger entries. Deliveries must progress DRAFT → PICKED → PACKED → VALIDATED. A validation is atomic, checks available quantity, locks locations/stocks/documents against concurrent operations, and cannot be applied twice. Ledger records are append-only in the application model. Validation and server errors use a consistent JSON error shape.

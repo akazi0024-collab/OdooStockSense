@@ -25,7 +25,7 @@ public class AuthService {
     public AuthService(UserRepository users,PasswordEncoder passwords,JwtService jwt) { this.users=users; this.passwords=passwords; this.jwt=jwt; }
     @Transactional public AuthResponse register(RegisterRequest request) {
         if (users.existsByEmailIgnoreCase(request.email())) throw new BadRequestException("Email is already registered");
-        AppUser user=new AppUser(); user.setName(request.name().trim()); user.setEmail(request.email().trim().toLowerCase()); user.setPasswordHash(passwords.encode(request.password())); user.getRoles().add(RoleName.STAFF);
+        AppUser user=new AppUser(); user.setName(request.name().trim()); user.setEmail(request.email().trim().toLowerCase()); user.setPasswordHash(passwords.encode(request.password())); user.getRoles().add(RoleName.WAREHOUSE_STAFF);
         return response(users.save(user));
     }
     @Transactional(readOnly=true) public AuthResponse login(LoginRequest request) {
@@ -38,6 +38,11 @@ public class AuthService {
         if (user.isEmpty()) return new MessageResponse("If the account exists, a reset code has been issued",null);
         String otp=String.format("%06d",random.nextInt(1_000_000)); otps.put(user.get().getEmail(),new Otp(otp,Instant.now().plusSeconds(600)));
         return new MessageResponse("Reset code issued; it expires in 10 minutes",exposeOtp?otp:null);
+    }
+    @Transactional(readOnly=true) public MessageResponse verifyOtp(VerifyOtpRequest request) {
+        String email=request.email().trim().toLowerCase(); Otp otp=otps.get(email);
+        if (otp==null || !otp.expiresAt().isAfter(Instant.now()) || !otp.value().equals(request.otp())) throw new BadRequestException("Reset code is invalid or expired");
+        return new MessageResponse("Reset code verified",null);
     }
     @Transactional public MessageResponse reset(ResetRequest request) {
         String email=request.email().trim().toLowerCase(); Otp otp=otps.get(email);

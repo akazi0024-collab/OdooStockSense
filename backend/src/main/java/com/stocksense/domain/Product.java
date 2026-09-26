@@ -13,6 +13,7 @@ public class Product extends BaseEntity {
     @Column(nullable=false, length=180) private String name;
     @Column(length=1000) private String description;
     @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="category_id") private Category category;
+    @Column(nullable=false, length=24) private String unitOfMeasure = "unit";
     @Column(nullable=false, precision=14, scale=2) private BigDecimal unitPrice = BigDecimal.ZERO;
     @Column(nullable=false) private int lowStockThreshold = 5;
     @Column(nullable=false) private boolean active = true;

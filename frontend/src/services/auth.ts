@@ -31,5 +31,6 @@ export const authService = {
     const { data } = await api.post<ForgotResult>('/auth/forgot-password', { email })
     return data
   },
+  verifyOtp(payload: { email: string; otp: string }) { return api.post('/auth/verify-otp', payload) },
   resetPassword(payload: { email: string; otp: string; newPassword: string }) { return api.post('/auth/reset-password', payload) },
 }

@@ -9,6 +9,8 @@ import com.stocksense.exception.NotFoundException;
 import com.stocksense.repository.*;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -31,6 +33,13 @@ public class InventoryService {
         r.items().forEach(i->{ ReceiptItem item=new ReceiptItem(); item.setReceipt(doc); item.setProduct(product(i.productId())); item.setQuantity(i.quantity()); item.setUnitCost(i.unitCost()); doc.getItems().add(item); });
         return receiptView(receipts.save(doc));
     }
+    @Transactional public DocumentView updateReceipt(Long id,ReceiptRequest r) {
+        Receipt doc=receipts.lockById(id).orElseThrow(()->missing("Receipt",id)); requireStatus(doc.getStatus(),DocumentStatus.DRAFT);
+        doc.setLocation(location(r.locationId())); doc.setSupplier(r.supplierId()==null?null:suppliers.findById(r.supplierId()).orElseThrow(()->missing("Supplier",r.supplierId()))); doc.getItems().clear();
+        r.items().forEach(i->{ ReceiptItem item=new ReceiptItem(); item.setReceipt(doc); item.setProduct(product(i.productId())); item.setQuantity(i.quantity()); item.setUnitCost(i.unitCost()); doc.getItems().add(item); });
+        return receiptView(doc);
+    }
+    @Transactional public void deleteReceipt(Long id) { Receipt doc=receipts.lockById(id).orElseThrow(()->missing("Receipt",id)); requireStatus(doc.getStatus(),DocumentStatus.DRAFT); receipts.delete(doc); }
     @Transactional(readOnly=true) public List<DocumentView> receipts() { return receipts.findAll().stream().map(this::receiptView).toList(); }
     @Transactional(readOnly=true) public DocumentView receipt(Long id) { return receiptView(receipts.findById(id).orElseThrow(()->missing("Receipt",id))); }
     @Transactional public DocumentView validateReceipt(Long id) {
@@ -46,6 +55,13 @@ public class InventoryService {
         r.items().forEach(i->{ DeliveryItem item=new DeliveryItem(); item.setDelivery(doc); item.setProduct(product(i.productId())); item.setQuantity(i.quantity()); doc.getItems().add(item); });
         return deliveryView(deliveries.save(doc));
     }
+    @Transactional public DocumentView updateDelivery(Long id,DeliveryRequest r) {
+        Delivery doc=deliveries.lockById(id).orElseThrow(()->missing("Delivery",id)); requireStatus(doc.getStatus(),DocumentStatus.DRAFT);
+        doc.setLocation(location(r.locationId())); doc.setCustomer(r.customerId()==null?null:customers.findById(r.customerId()).orElseThrow(()->missing("Customer",r.customerId()))); doc.getItems().clear();
+        r.items().forEach(i->{ DeliveryItem item=new DeliveryItem(); item.setDelivery(doc); item.setProduct(product(i.productId())); item.setQuantity(i.quantity()); doc.getItems().add(item); });
+        return deliveryView(doc);
+    }
+    @Transactional public void deleteDelivery(Long id) { Delivery doc=deliveries.lockById(id).orElseThrow(()->missing("Delivery",id)); requireStatus(doc.getStatus(),DocumentStatus.DRAFT); deliveries.delete(doc); }
     @Transactional(readOnly=true) public List<DocumentView> deliveries() { return deliveries.findAll().stream().map(this::deliveryView).toList(); }
     @Transactional(readOnly=true) public DocumentView delivery(Long id) { return deliveryView(deliveries.findById(id).orElseThrow(()->missing("Delivery",id))); }
     @Transactional public DocumentView pick(Long id) { Delivery d=deliveries.lockById(id).orElseThrow(()->missing("Delivery",id)); requireStatus(d.getStatus(),DocumentStatus.DRAFT); d.setStatus(DocumentStatus.PICKED); return deliveryView(d); }
@@ -62,6 +78,12 @@ public class InventoryService {
         StockTransfer t=new StockTransfer(); t.setReference(reference("TRF")); t.setProduct(product(r.productId())); t.setFromLocation(location(r.fromLocationId())); t.setToLocation(location(r.toLocationId())); t.setQuantity(r.quantity());
         return transferView(transfers.save(t));
     }
+    @Transactional public TransferView updateTransfer(Long id,TransferRequest r) {
+        if (r.fromLocationId().equals(r.toLocationId())) throw new BadRequestException("Source and destination locations must differ");
+        StockTransfer t=transfers.lockById(id).orElseThrow(()->missing("Transfer",id)); requireStatus(t.getStatus(),DocumentStatus.DRAFT);
+        t.setProduct(product(r.productId())); t.setFromLocation(location(r.fromLocationId())); t.setToLocation(location(r.toLocationId())); t.setQuantity(r.quantity()); return transferView(t);
+    }
+    @Transactional public void deleteTransfer(Long id) { StockTransfer t=transfers.lockById(id).orElseThrow(()->missing("Transfer",id)); requireStatus(t.getStatus(),DocumentStatus.DRAFT); transfers.delete(t); }
     @Transactional(readOnly=true) public List<TransferView> transfers() { return transfers.findAll().stream().map(this::transferView).toList(); }
     @Transactional(readOnly=true) public TransferView transfer(Long id) { return transferView(transfers.findById(id).orElseThrow(()->missing("Transfer",id))); }
     @Transactional public TransferView validateTransfer(Long id) {
@@ -74,14 +96,25 @@ public class InventoryService {
 
     @Transactional public AdjustmentView createAdjustment(AdjustmentRequest r) {
         StockAdjustment a=new StockAdjustment(); a.setReference(reference("ADJ")); a.setProduct(product(r.productId())); a.setLocation(location(r.locationId()));
-        a.setQuantityDelta(r.increase()?r.quantity():r.quantity().negate()); a.setReason(r.reason().trim()); return adjustmentView(adjustments.save(a));
+        BigDecimal system=stocks.findByProductIdAndLocationId(r.productId(),r.locationId()).map(Stock::getQuantity).orElse(BigDecimal.ZERO);
+        a.setSystemQuantity(system); a.setPhysicalQuantity(r.physicalQuantity()); a.setQuantityDelta(r.physicalQuantity().subtract(system));
+        a.setReason(r.reason().trim()); return adjustmentView(adjustments.save(a));
     }
+    @Transactional public AdjustmentView updateAdjustment(Long id,AdjustmentRequest r) {
+        StockAdjustment a=adjustments.lockById(id).orElseThrow(()->missing("Adjustment",id)); requireStatus(a.getStatus(),DocumentStatus.DRAFT);
+        a.setProduct(product(r.productId())); a.setLocation(location(r.locationId())); a.setPhysicalQuantity(r.physicalQuantity()); a.setReason(r.reason().trim());
+        BigDecimal system=stocks.findByProductIdAndLocationId(r.productId(),r.locationId()).map(Stock::getQuantity).orElse(BigDecimal.ZERO); a.setSystemQuantity(system); a.setQuantityDelta(r.physicalQuantity().subtract(system)); return adjustmentView(a);
+    }
+    @Transactional public void deleteAdjustment(Long id) { StockAdjustment a=adjustments.lockById(id).orElseThrow(()->missing("Adjustment",id)); requireStatus(a.getStatus(),DocumentStatus.DRAFT); adjustments.delete(a); }
     @Transactional(readOnly=true) public List<AdjustmentView> adjustments() { return adjustments.findAll().stream().map(this::adjustmentView).toList(); }
     @Transactional(readOnly=true) public AdjustmentView adjustment(Long id) { return adjustmentView(adjustments.findById(id).orElseThrow(()->missing("Adjustment",id))); }
     @Transactional public AdjustmentView validateAdjustment(Long id) {
         StockAdjustment a=adjustments.lockById(id).orElseThrow(()->missing("Adjustment",id)); requireStatus(a.getStatus(),DocumentStatus.DRAFT); lockLocation(a.getLocation().getId());
-        LedgerType type=a.getQuantityDelta().signum()>0?LedgerType.ADJUSTMENT_IN:LedgerType.ADJUSTMENT_OUT;
-        change(a.getProduct().getId(),a.getLocation().getId(),a.getQuantityDelta(),type,a.getReference()); a.setStatus(DocumentStatus.VALIDATED); return adjustmentView(a);
+        BigDecimal system=stocks.findByProductIdAndLocationId(a.getProduct().getId(),a.getLocation().getId()).map(Stock::getQuantity).orElse(BigDecimal.ZERO);
+        BigDecimal difference=a.getPhysicalQuantity().subtract(system);
+        a.setSystemQuantity(system); a.setQuantityDelta(difference);
+        LedgerType type=difference.signum()>=0?LedgerType.ADJUSTMENT_IN:LedgerType.ADJUSTMENT_OUT;
+        change(a.getProduct().getId(),a.getLocation().getId(),difference,type,a.getReference()); a.setStatus(DocumentStatus.VALIDATED); return adjustmentView(a);
     }
 
     @Transactional(readOnly=true) public List<StockView> stock(Long locationId,Long productId) {
@@ -89,11 +122,16 @@ public class InventoryService {
         if (locationId!=null && productId!=null) result=result.stream().filter(s->s.getProduct().getId().equals(productId)).toList();
         return result.stream().map(this::stockView).toList();
     }
-    @Transactional(readOnly=true) public List<StockView> lowStock() { return stocks.findAll().stream().filter(s->s.getQuantity().compareTo(BigDecimal.valueOf(s.getProduct().getLowStockThreshold()))<=0).map(this::stockView).toList(); }
+    @Transactional(readOnly=true) public List<StockView> stockForWarehouse(Long warehouseId) { return stocks.findByLocationWarehouseId(warehouseId).stream().map(this::stockView).toList(); }
+    @Transactional(readOnly=true) public List<StockView> lowStock() { return stocks.findAll().stream().filter(s->s.getQuantity().signum()>0 && s.getQuantity().compareTo(BigDecimal.valueOf(s.getProduct().getLowStockThreshold()))<=0).map(this::stockView).toList(); }
     @Transactional(readOnly=true) public List<LedgerView> ledger(Long locationId,int size) {
         int bounded=Math.max(1,Math.min(size,200)); var page=PageRequest.of(0,bounded);
         List<StockLedger> entries=locationId==null?ledger.findAllByOrderByOccurredAtDesc(page):ledger.findByStockLocationIdOrderByOccurredAtDesc(locationId,page);
         return entries.stream().map(this::ledgerView).toList();
+    }
+    @Transactional(readOnly=true) public List<LedgerView> ledgerForProduct(Long productId,int size) {
+        if (!products.existsById(productId)) throw missing("Product",productId);
+        return ledger.findByStockProductIdOrderByOccurredAtDesc(productId,PageRequest.of(0,Math.max(1,Math.min(size,200)))).stream().map(this::ledgerView).toList();
     }
 
     private void change(Long productId,Long locationId,BigDecimal delta,LedgerType type,String ref) {
@@ -103,7 +141,8 @@ public class InventoryService {
         BigDecimal next=stock.getQuantity().add(delta);
         if (next.signum()<0) throw new BadRequestException("Insufficient stock for product "+stock.getProduct().getSku()+" at location "+stock.getLocation().getName());
         stock.setQuantity(next);
-        StockLedger entry=new StockLedger(); entry.setStock(stock); entry.setType(type); entry.setQuantityDelta(delta); entry.setBalanceAfter(next); entry.setReference(ref); ledger.save(entry);
+        StockLedger entry=new StockLedger(); entry.setStock(stock); entry.setType(type); entry.setQuantityDelta(delta); entry.setBalanceAfter(next); entry.setReference(ref);
+        Authentication actor=SecurityContextHolder.getContext().getAuthentication(); entry.setPerformedBy(actor==null?"system":actor.getName()); ledger.save(entry);
     }
     private void lockLocations(Long first,Long second) {
         List<Long> ids=new ArrayList<>(List.of(first,second)); ids.sort(Comparator.naturalOrder()); ids.forEach(this::lockLocation);
@@ -116,8 +155,8 @@ public class InventoryService {
     private NotFoundException missing(String type,Long id) { return new NotFoundException(type+" "+id+" not found"); }
     private DocumentView receiptView(Receipt d) { return new DocumentView(d.getId(),d.getReference(),d.getStatus().name(),d.getLocation().getId(),d.getLocation().getName(),d.getSupplier()==null?null:d.getSupplier().getId(),d.getSupplier()==null?null:d.getSupplier().getName(),d.getItems().stream().map(i->new ItemView(i.getProduct().getId(),i.getProduct().getSku(),i.getProduct().getName(),i.getQuantity(),i.getUnitCost())).toList(),d.getCreatedAt()); }
     private DocumentView deliveryView(Delivery d) { return new DocumentView(d.getId(),d.getReference(),d.getStatus().name(),d.getLocation().getId(),d.getLocation().getName(),d.getCustomer()==null?null:d.getCustomer().getId(),d.getCustomer()==null?null:d.getCustomer().getName(),d.getItems().stream().map(i->new ItemView(i.getProduct().getId(),i.getProduct().getSku(),i.getProduct().getName(),i.getQuantity(),null)).toList(),d.getCreatedAt()); }
-    private TransferView transferView(StockTransfer t) { return new TransferView(t.getId(),t.getReference(),t.getStatus().name(),t.getProduct().getId(),t.getProduct().getName(),t.getFromLocation().getId(),t.getToLocation().getId(),t.getQuantity(),t.getCreatedAt()); }
-    private AdjustmentView adjustmentView(StockAdjustment a) { return new AdjustmentView(a.getId(),a.getReference(),a.getStatus().name(),a.getProduct().getId(),a.getProduct().getName(),a.getLocation().getId(),a.getQuantityDelta(),a.getReason(),a.getCreatedAt()); }
+    private TransferView transferView(StockTransfer t) { return new TransferView(t.getId(),t.getReference(),t.getStatus().name(),t.getProduct().getId(),t.getProduct().getName(),t.getFromLocation().getId(),t.getFromLocation().getName(),t.getToLocation().getId(),t.getToLocation().getName(),t.getQuantity(),t.getCreatedAt()); }
+    private AdjustmentView adjustmentView(StockAdjustment a) { return new AdjustmentView(a.getId(),a.getReference(),a.getStatus().name(),a.getProduct().getId(),a.getProduct().getName(),a.getLocation().getId(),a.getSystemQuantity(),a.getPhysicalQuantity(),a.getQuantityDelta(),a.getReason(),a.getCreatedAt()); }
     private StockView stockView(Stock s) { return new StockView(s.getId(),s.getProduct().getId(),s.getProduct().getSku(),s.getProduct().getName(),s.getLocation().getId(),s.getLocation().getName(),s.getLocation().getWarehouse().getName(),s.getQuantity(),s.getProduct().getLowStockThreshold()); }
-    private LedgerView ledgerView(StockLedger e) { return new LedgerView(e.getId(),e.getType().name(),e.getQuantityDelta(),e.getBalanceAfter(),e.getReference(),e.getStock().getProduct().getId(),e.getStock().getProduct().getName(),e.getStock().getLocation().getId(),e.getStock().getLocation().getName(),e.getOccurredAt()); }
+    private LedgerView ledgerView(StockLedger e) { return new LedgerView(e.getId(),e.getType().name(),e.getQuantityDelta(),e.getBalanceAfter(),e.getReference(),e.getStock().getProduct().getId(),e.getStock().getProduct().getName(),e.getStock().getLocation().getId(),e.getStock().getLocation().getName(),e.getPerformedBy(),e.getOccurredAt()); }
 }

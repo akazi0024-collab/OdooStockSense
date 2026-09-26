@@ -15,6 +15,7 @@ public class StockLedger extends BaseEntity {
     @Column(nullable=false, precision=14, scale=3) private BigDecimal quantityDelta;
     @Column(nullable=false, precision=14, scale=3) private BigDecimal balanceAfter;
     @Column(nullable=false, length=60) private String reference;
+    @Column(length=180) private String performedBy;
     @Column(name="occurred_at", nullable=false, updatable=false) private Instant occurredAt;
     @PrePersist protected void stamp() { if (occurredAt == null) occurredAt=Instant.now(); }
     @PreUpdate protected void immutableUpdate() { throw new IllegalStateException("Stock ledger entries are immutable"); }
