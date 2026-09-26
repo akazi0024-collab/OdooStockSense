@@ -1,0 +1,28 @@
+server:
+  port: ${PORT:8080}
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/stocksense?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-key-change-me-please-32bytes-minimum}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  cors:
+    allowed-origin: ${CORS_ORIGIN:http://localhost:5173}
+  reset:
+    expose-otp: ${RESET_EXPOSE_OTP:true}
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
